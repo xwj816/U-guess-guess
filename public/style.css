@@ -1,0 +1,127 @@
+/* public/style.css */
+:root {
+    --bg-color: #5f27cd; /* Gartic 紫色背景 */
+    --panel-bg: #fff;
+    --tool-bg: #eee;
+    --border-color: #ccc;
+    --active-color: #333;
+}
+
+body {
+    margin: 0;
+    background-color: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+    color: #333;
+}
+
+/* 畫布區塊容器 */
+.canvas-wrapper {
+    background: var(--panel-bg);
+    padding: 10px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+canvas {
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    cursor: crosshair;
+    background: white;
+    touch-action: none; /* 防止觸控時捲動頁面 */
+}
+
+/* 下方工具列 */
+.toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* 筆刷與功能按鈕群組 */
+.tools-left {
+    display: flex;
+    gap: 6px;
+    background: var(--tool-bg);
+    padding: 6px;
+    border-radius: 8px;
+}
+
+.tool-btn {
+    width: 42px;
+    height: 42px;
+    border: none;
+    background: white;
+    border-radius: 6px;
+    font-size: 22px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.tool-btn:hover { 
+    background: #f0f0f0; 
+    transform: translateY(-2px);
+}
+
+.tool-btn.active { 
+    background: var(--bg-color); 
+    color: white; 
+}
+
+/* 清空按鈕特別樣式 */
+.btn-clear {
+    color: #ff4757;
+}
+.btn-clear:hover {
+    background: #ff4757;
+    color: white;
+}
+
+/* 顏色色票區 */
+.colors {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    background: var(--tool-bg);
+    padding: 6px;
+    border-radius: 8px;
+}
+
+.color-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s;
+}
+
+.color-swatch:hover { 
+    transform: scale(1.2); 
+    z-index: 10;
+}
+
+.color-swatch.active { 
+    border-color: var(--active-color); 
+    box-shadow: 0 0 5px rgba(0,0,0,0.5); 
+    transform: scale(1.1);
+}
+
+/* 粗細滑桿 */
+.size-slider {
+    width: 120px;
+    cursor: pointer;
+}
