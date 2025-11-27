@@ -1,26 +1,27 @@
 /* public/style.css */
 :root {
-    --bg-color: #5f27cd; /* Gartic 紫色背景 */
-    --panel-bg: #fff;
-    --tool-bg: #eee;
-    --border-color: #ccc;
+    --bg-color: #5f27cd;
+    --panel-bg: #ffffff;
+    --tool-bg: #f1f2f6;
+    --border-color: #dfe4ea;
     --active-color: #333;
 }
 
 body {
     margin: 0;
+    padding: 0;
     background-color: var(--bg-color);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh; /* 使用 min-height 避免手機網址列遮擋 */
     font-family: 'Segoe UI', sans-serif;
-    overflow: hidden;
-    color: #333;
+    overflow: hidden; /* 禁止整體頁面捲動 */
+    touch-action: none; /* 禁止手機上的預設縮放與滑動 */
 }
 
-/* 畫布區塊容器 */
+/* 畫布容器：改為百分比寬度，最大不超過 800px */
 .canvas-wrapper {
     background: var(--panel-bg);
     padding: 10px;
@@ -29,6 +30,9 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    width: 95%;          /* 手機版佔寬 95% */
+    max-width: 800px;    /* 電腦版最大 800px */
+    box-sizing: border-box;
 }
 
 canvas {
@@ -36,33 +40,39 @@ canvas {
     border-radius: 6px;
     cursor: crosshair;
     background: white;
-    touch-action: none; /* 防止觸控時捲動頁面 */
+    
+    /* 關鍵：讓畫布跟著容器縮放 */
+    width: 100%;
+    height: auto;
+    touch-action: none; /* 畫圖時禁止瀏覽器捲動 */
 }
 
-/* 下方工具列 */
+/* 工具列：允許換行 */
 .toolbar {
     display: flex;
     gap: 10px;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap; /* 手機版太窄時自動換行 */
 }
 
-/* 筆刷與功能按鈕群組 */
+/* 左側按鈕群 */
 .tools-left {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     background: var(--tool-bg);
-    padding: 6px;
+    padding: 5px;
     border-radius: 8px;
+    flex-shrink: 0;
 }
 
 .tool-btn {
-    width: 42px;
-    height: 42px;
+    width: 40px; /* 加大觸控區 */
+    height: 40px;
     border: none;
     background: white;
     border-radius: 6px;
-    font-size: 22px;
+    font-size: 20px;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -71,57 +81,56 @@ canvas {
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
-.tool-btn:hover { 
-    background: #f0f0f0; 
+.tool-btn:hover, .tool-btn:active { 
+    background: #eccc68; 
     transform: translateY(-2px);
 }
-
 .tool-btn.active { 
     background: var(--bg-color); 
     color: white; 
 }
 
-/* 清空按鈕特別樣式 */
-.btn-clear {
-    color: #ff4757;
-}
-.btn-clear:hover {
-    background: #ff4757;
-    color: white;
-}
-
-/* 顏色色票區 */
+/* 顏色區：自動適應寬度 */
 .colors {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    display: flex;
+    flex-wrap: wrap; /* 顏色太多自動換行 */
     gap: 5px;
     background: var(--tool-bg);
-    padding: 6px;
+    padding: 5px;
     border-radius: 8px;
+    justify-content: center;
+    flex-grow: 1;
 }
 
 .color-swatch {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: 4px;
     cursor: pointer;
     border: 2px solid transparent;
-    transition: transform 0.1s;
 }
-
-.color-swatch:hover { 
-    transform: scale(1.2); 
-    z-index: 10;
-}
-
 .color-swatch.active { 
-    border-color: var(--active-color); 
-    box-shadow: 0 0 5px rgba(0,0,0,0.5); 
-    transform: scale(1.1);
+    border-color: #333; 
+    transform: scale(1.2); 
+    box-shadow: 0 0 5px rgba(0,0,0,0.3);
 }
 
-/* 粗細滑桿 */
-.size-slider {
-    width: 120px;
-    cursor: pointer;
+.btn-clear { color: #ff4757; }
+.btn-clear:hover { background: #ff4757; color: white; }
+
+/* 手機版特別調整 */
+@media (max-width: 600px) {
+    .toolbar {
+        justify-content: center;
+        gap: 8px;
+    }
+    .size-slider {
+        width: 100%; /* 滑桿在手機上佔滿整行 */
+        order: 3;    /* 把滑桿排到最後面 */
+        margin-top: 5px;
+    }
+    .color-swatch {
+        width: 20px;
+        height: 20px;
+    }
 }
