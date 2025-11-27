@@ -14,6 +14,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- 這裡就是我們的「暫時資料庫」 ---
 let strokes = [];  // 用一個陣列來存所有畫筆
 let currentId = 0; // 模擬 ID 自動遞增
+let canvasVersion = 0; // 新增：畫布版本號
 
 // API: 接收畫筆線段
 app.post('/api/draw', (req, res) => {
@@ -43,13 +44,17 @@ app.get('/api/fetch_strokes', (req, res) => {
     // 從陣列中過濾出 ID 比 last_id 大的資料
     const newStrokes = strokes.filter(s => s.id > last_id);
 
-    res.json({ strokes: newStrokes });
+    res.json({ 
+        strokes: newStrokes, 
+        version: canvasVersion 
+    });
 });
 
 // API: 清空畫布
 app.post('/api/clear', (req, res) => {
     strokes = [];    // 清空陣列
     currentId = 0;   // 重置 ID
+    canvasVersion++; // 修改：每次清空，版本號 +1
     res.json({ status: 'cleared' });
 });
 
