@@ -221,18 +221,17 @@
         }, 500);
 
         function clearServerCanvas() {
-            if(confirm('確定清空？')) {
-                fetch('/api/clear', { method: 'POST' })
-                    .then(res => res.json())
-                    .then(data => {
-                        // 自己按清空的人，直接重整或清空就好
-                       // 這裡我們簡單點，直接清空本地並更新版本
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        lastSyncedId = 0;
-                        localVersion = data.version;
-                    });
-            }
+            fetch('/api/clear', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    // 自己按清空的人，直接重整或清空就好
+                    // 這裡我們簡單點，直接清空本地並更新版本
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    lastSyncedId = 0;
+                    localVersion = data.version;
+                });
         }
     </script>
 </body>
+
 </html>
