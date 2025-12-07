@@ -126,7 +126,8 @@ function initCanvas() {
     canvas.addEventListener('mouseup', endDraw);
     canvas.addEventListener('mouseout', endDraw);
 
-    // 綁定手機觸控事件 (passive: false 很重要，允許 preventDefault)
+    // 綁定手機觸控事件
+    // 🔥 重點：一定要有 { passive: false }，否則 preventDefault 會失效
     canvas.addEventListener('touchstart', startDraw, { passive: false });
     canvas.addEventListener('touchmove', moveDraw, { passive: false });
     canvas.addEventListener('touchend', endDraw);
@@ -157,9 +158,15 @@ function updateCtxStyle() {
     ctx.strokeStyle = currentColor;
 }
 
-// 核心：取得正確的座標 (相容 MouseEvent 和 TouchEvent)
+// 核心：取得正確的座標 (修正 CSS 縮放導致的偏移)
 function getPos(e) {
     const rect = canvas.getBoundingClientRect();
+    
+    // 計算 CSS 縮放比例 (內部解析度 / 顯示大小)
+    // 這是解決「筆跡偏移」的關鍵公式
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     let clientX, clientY;
 
     if (e.touches && e.touches.length > 0) {
@@ -173,8 +180,9 @@ function getPos(e) {
     }
 
     return {
-        x: clientX - rect.left,
-        y: clientY - rect.top
+        // 將 螢幕座標 轉換為 畫布內部座標
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
     };
 }
 

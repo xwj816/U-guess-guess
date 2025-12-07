@@ -237,13 +237,16 @@ body {
     cursor: pointer;
 }
 
-/* 畫布本身 */
 #drawingCanvas {
-    flex-grow: 1; /* 佔據所有剩餘空間 */
+    flex-grow: 1;
     background-color: white;
     border: 1px solid #ccc;
-    cursor: crosshair; /* 畫筆游標 */
-    width: 100%; /* 確保寬度填滿 */
+    cursor: crosshair;
+    width: 100%;
+    
+    /* 🔥 新增這一行：這是手機畫圖順暢的關鍵！ */
+    touch-action: none; 
+    
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
@@ -319,11 +322,12 @@ body {
         gap: 10px;
     }
 
-    /* 調整順序：畫布在上方，聊天室在下方 */
     .drawing-area {
         order: 1; 
-        height: 55vh; /* 畫布佔畫面 55% */
-        flex-grow: 0;
+        height: 55vh; 
+        /* 🔥 新增這兩行：確保畫布不會因為鍵盤彈出而被壓扁 */
+        min-height: 300px; 
+        flex-shrink: 0;
     }
 
     .sidebar {
