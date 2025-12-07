@@ -142,12 +142,23 @@ function initCanvas() {
 
 // 輔助：重新計算畫布大小
 function resizeCanvas() {
-    // 記下當前的畫面內容 (因為 resize 會清空畫布)
-    // 簡單實作：若要完美保留，需將歷史筆跡重繪，這裡先僅做尺寸適配
-    const parent = canvas.parentElement;
-    canvas.width = parent.offsetWidth; // 減去 padding
-    canvas.height = parent.offsetHeight - 60; // 減去工具列高度預留
-    updateCtxStyle();
+    // 1. 先讓 CSS 排版完成，畫布會自動被 flex 撐開到正確大小
+    // 2. JS 讀取此時的「顯示寬高」 (clientWidth / clientHeight)
+    const displayWidth = canvas.clientWidth;
+    const displayHeight = canvas.clientHeight;
+
+    // 3. 如果解析度跟顯示大小不同，才需要修改 (避免頻繁重繪)
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+        
+        // 注意：修改 width/height 會清空畫布，記得重新設定畫筆樣式
+        updateCtxStyle(); 
+        
+        // 進階技巧：如果是「改變視窗大小」導致的重設，
+        // 最好能向 Server 請求重發當前圖面 (socket.emit('requestCurrentBoard'))
+        // 但這裡我們先保持簡單，只要確保新畫的線條位置正確即可。
+    }
 }
 
 function updateCtxStyle() {

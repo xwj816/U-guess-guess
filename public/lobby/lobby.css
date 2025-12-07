@@ -176,6 +176,9 @@ body {
     display: flex;
     flex-direction: column;
     padding: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* 防止內部元件撐開導致捲動 */
 }
 
 .toolbar {
@@ -238,15 +241,20 @@ body {
 }
 
 #drawingCanvas {
-    flex-grow: 1;
+    /* 刪除原本的 height 或 width 設定 */
+    
+    /* 🔥 關鍵修改：利用 flex-grow 填滿剩餘空間 */
+    flex-grow: 1; 
+    width: 100%; 
+    
+    /* 🔥 重要：設為 0 讓 flex 正確計算高度，避免被內容撐大 */
+    height: 0; 
+    min-height: 0;
+    
     background-color: white;
     border: 1px solid #ccc;
     cursor: crosshair;
-    width: 100%;
-    
-    /* 🔥 新增這一行：這是手機畫圖順暢的關鍵！ */
-    touch-action: none; 
-    
+    touch-action: none;
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
