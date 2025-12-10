@@ -1,37 +1,40 @@
-// lobby/lobby.js
-const socket = io(); // 連線到 Socket.IO 伺服器
+// lobby/lobby.js - 修正分數與計時條顯示
+const socket = io(); 
 
 // --- 全域變數 ---
 let USERNAME = '';
 let USER_ID = '';
 let ROOM_ID = '';
-let IS_DRAWER = false; // 用來判斷是否為畫家 (只有畫家能畫圖)
-let currentWordLength = 0; // 猜家看的字數
+let IS_DRAWER = false; 
 let canvas, ctx;
 
-// --- 畫布變數 ---
+// --- 畫布與顏色設定 ---
 let isDrawing = false;
 let lastX = 0;
 let lastY = 0;
 let currentColor = '#000000';
 let currentSize = 5;
-let currentTool = 'pen'; // 'pen' 或 'eraser'
+let currentTool = 'pen'; 
 
-// --- DOM 元素 ---
-const messagesEl = document.getElementById('messages');
-const chatInput = document.getElementById('chatInput');
-const guessForm = document.getElementById('guessForm');
-const wordModal = document.getElementById('wordModal');
-const wordForm = document.getElementById('wordForm');
-const wordInput = document.getElementById('wordInput');
-const currentWordDisplay = document.getElementById('currentWordDisplay');
-const gameStatusEl = document.getElementById('gameStatus');
-const playerListEl = document.getElementById('playerList');
-const startRoundButton = document.getElementById('startRoundButton');
+const COLORS = [
+    '#000000', '#555555', '#ffffff', '#ff0000', '#ff7f00', '#ffff00', 
+    '#00ff00', '#00ffff', '#0000ff', '#9b00ff', '#ff69b4', '#8b4513'
+];
 
-// ----------------------------------------
-// I. 初始化 & URL 參數處理
-// ----------------------------------------
+const els = {
+    messages: document.getElementById('messages'),
+    chatInput: document.getElementById('chatInput'),
+    guessForm: document.getElementById('guessForm'),
+    wordModal: document.getElementById('wordModal'),
+    wordForm: document.getElementById('wordForm'),
+    wordInput: document.getElementById('wordInput'),
+    currentWordDisplay: document.getElementById('currentWordDisplay'),
+    gameStatus: document.getElementById('gameStatus'),
+    playerList: document.getElementById('playerList'),
+    startRoundBtn: document.getElementById('startRoundButton'),
+    roomTitle: document.getElementById('roomTitle'),
+    timerBar: document.getElementById('timerBar') // 必須與 HTML 對應
+};
 
 function getUrlParams() {
     const params = new URLSearchParams(window.location.search);
@@ -44,95 +47,90 @@ function getUrlParams() {
 
 function initGame() {
     const { username, roomID, userId } = getUrlParams();
-
     if (!username || !roomID || !userId) {
-        alert("缺少必要的用戶資訊或房間 ID，將返回登入頁。");
+        alert("資料不完整");
         window.location.href = "../login/login.html";
         return;
     }
-
     USERNAME = username;
     USER_ID = userId;
     ROOM_ID = roomID;
+    if (els.roomTitle) els.roomTitle.textContent = `房間：${ROOM_ID}`;
+    socket.emit('joinRoom', { roomId: ROOM_ID, userId: USER_ID, nickname: USERNAME });
 
-    document.getElementById('roomTitle').textContent = `房間：${ROOM_ID}`;
-    
-    // 1. 連線到伺服器並加入房間
-    socket.emit('joinRoom', { 
-        roomId: ROOM_ID, 
-        userId: USER_ID, 
-        nickname: USERNAME 
-    });
-
-    // 2. 初始化畫布
     initCanvas();
-
-    // 3. 事件監聽 (畫布工具、聊天、遊戲流程)
     setupEventListeners();
+    initColorPalette();
 
-    // 預設狀態：猜家/等待
     toggleDrawerControls(false); 
-    gameStatusEl.textContent = '等待玩家加入並開始遊戲...';
+    els.startRoundBtn.style.display = 'none'; 
+    els.gameStatus.textContent = '等待遊戲開始...';
 }
 
-// ----------------------------------------
-// II. 畫布操作 (Drawer & Socket)
-// ----------------------------------------
+function initColorPalette() {
+    const paletteContainer = document.getElementById('colorPalette');
+    if (!paletteContainer) return;
+    paletteContainer.innerHTML = '';
+    COLORS.forEach(color => {
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = color;
+        swatch.addEventListener('click', () => selectColor(color));
+        if (color === currentColor) swatch.classList.add('active');
+        paletteContainer.appendChild(swatch);
+    });
+}
+
+function selectColor(color) {
+    currentColor = color;
+    currentTool = 'pen'; 
+    document.querySelectorAll('.color-swatch').forEach(swatch => {
+        const temp = document.createElement('div');
+        temp.style.color = color;
+        document.body.appendChild(temp);
+        const targetColor = window.getComputedStyle(temp).color;
+        document.body.removeChild(temp);
+        if (swatch.style.backgroundColor === targetColor) swatch.classList.add('active');
+        else swatch.classList.remove('active');
+    });
+    document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+    const penBtn = document.getElementById('toolPen');
+    if(penBtn) penBtn.classList.add('active');
+}
+
+function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    let clientX = e.clientX, clientY = e.clientY;
+    if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    }
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
 
 function initCanvas() {
     canvas = document.getElementById('drawingCanvas');
     ctx = canvas.getContext('2d');
-    
-    // 設定畫布尺寸
+    const resizeCanvas = () => {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.lineWidth = currentSize; ctx.strokeStyle = currentColor;
+    };
     resizeCanvas();
-    
-    // 監聽視窗改變大小，重設畫布尺寸 (避免變形)
     window.addEventListener('resize', resizeCanvas);
 
-    // 預設畫筆設定
-    updateCtxStyle();
+    const startDraw = (e) => { if (IS_DRAWER) { if(e.type==='touchstart')e.preventDefault(); isDrawing=true; const p=getPos(e); lastX=p.x; lastY=p.y; draw(e); }};
+    const moveDraw = (e) => { if (IS_DRAWER && isDrawing) { if(e.type==='touchmove')e.preventDefault(); draw(e); }};
+    const endDraw = () => { isDrawing = false; };
 
-    // === 統一處理輸入事件 (滑鼠 + 觸控) ===
-    
-    // 1. 開始畫 (mousedown / touchstart)
-    const startDraw = (e) => {
-        if (!IS_DRAWER) return;
-        e.preventDefault(); // 防止手機畫面捲動
-        isDrawing = true;
-        
-        const pos = getPos(e);
-        lastX = pos.x;
-        lastY = pos.y;
-        
-        // 點一下也要畫一個點
-        draw(e); 
-    };
-
-    // 2. 移動中 (mousemove / touchmove)
-    const moveDraw = (e) => {
-        if (!IS_DRAWER || !isDrawing) return;
-        e.preventDefault(); // 防止手機畫面捲動
-        draw(e);
-    };
-
-    // 3. 結束畫 (mouseup / touchend / mouseout)
-    const endDraw = (e) => {
-        isDrawing = false;
-    };
-
-    // 綁定電腦滑鼠事件
-    canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('mousemove', moveDraw);
-    canvas.addEventListener('mouseup', endDraw);
-    canvas.addEventListener('mouseout', endDraw);
-
-    // 綁定手機觸控事件
-    // 🔥 重點：一定要有 { passive: false }，否則 preventDefault 會失效
-    canvas.addEventListener('touchstart', startDraw, { passive: false });
-    canvas.addEventListener('touchmove', moveDraw, { passive: false });
+    canvas.addEventListener('mousedown', startDraw); canvas.addEventListener('mousemove', moveDraw);
+    canvas.addEventListener('mouseup', endDraw); canvas.addEventListener('mouseout', endDraw);
+    canvas.addEventListener('touchstart', startDraw, {passive:false}); canvas.addEventListener('touchmove', moveDraw, {passive:false});
     canvas.addEventListener('touchend', endDraw);
 
-    // 清空畫布功能
     document.getElementById('clearCanvas').addEventListener('click', () => {
         if (!IS_DRAWER) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -140,319 +138,164 @@ function initCanvas() {
     });
 }
 
-// 輔助：重新計算畫布大小
-function resizeCanvas() {
-    // 1. 先讓 CSS 排版完成，畫布會自動被 flex 撐開到正確大小
-    // 2. JS 讀取此時的「顯示寬高」 (clientWidth / clientHeight)
-    const displayWidth = canvas.clientWidth;
-    const displayHeight = canvas.clientHeight;
-
-    // 3. 如果解析度跟顯示大小不同，才需要修改 (避免頻繁重繪)
-    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
-        
-        // 注意：修改 width/height 會清空畫布，記得重新設定畫筆樣式
-        updateCtxStyle(); 
-        
-        // 進階技巧：如果是「改變視窗大小」導致的重設，
-        // 最好能向 Server 請求重發當前圖面 (socket.emit('requestCurrentBoard'))
-        // 但這裡我們先保持簡單，只要確保新畫的線條位置正確即可。
-    }
-}
-
-function updateCtxStyle() {
-    if(!ctx) return;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = currentSize;
-    ctx.strokeStyle = currentColor;
-}
-
-// 核心：取得正確的座標 (修正 CSS 縮放導致的偏移)
-function getPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    
-    // 計算 CSS 縮放比例 (內部解析度 / 顯示大小)
-    // 這是解決「筆跡偏移」的關鍵公式
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    let clientX, clientY;
-
-    if (e.touches && e.touches.length > 0) {
-        // 觸控事件
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-    } else {
-        // 滑鼠事件
-        clientX = e.clientX;
-        clientY = e.clientY;
-    }
-
-    return {
-        // 將 螢幕座標 轉換為 畫布內部座標
-        x: (clientX - rect.left) * scaleX,
-        y: (clientY - rect.top) * scaleY
-    };
-}
-
 function draw(e) {
     if (!isDrawing) return;
-    
     const pos = getPos(e);
-    const newX = pos.x;
-    const newY = pos.y;
-
-    // 在本地畫
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(newX, newY);
+    ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(pos.x, pos.y);
     ctx.strokeStyle = (currentTool === 'pen') ? currentColor : '#FFFFFF';
-    ctx.lineWidth = currentSize;
-    ctx.stroke();
-
-    // 將線段資料傳給伺服器廣播
-    // 優化：傳輸整數座標減少封包大小
-    socket.emit('drawing', {
-        roomId: ROOM_ID,
-        x0: Math.round(lastX),
-        y0: Math.round(lastY),
-        x1: Math.round(newX),
-        y1: Math.round(newY),
-        color: currentColor,
-        size: currentSize,
-        tool: currentTool
-    });
-
-    [lastX, lastY] = [newX, newY];
+    ctx.lineWidth = currentSize; ctx.stroke();
+    socket.emit('drawing', { roomId: ROOM_ID, x0: lastX, y0: lastY, x1: pos.x, y1: pos.y, color: currentColor, size: currentSize, tool: currentTool });
+    lastX = pos.x; lastY = pos.y;
 }
 
-// ... (後方的 socket.on('drawing') 和其他程式碼保持不變)
-
-// 注意：如果你原本的 socket.on('drawing') 裡面沒有 updateCtxStyle 的邏輯，
-// 建議修改 socket.on('drawing') 如下，確保別人的畫筆不會影響到自己的設定：
 socket.on('drawing', (data) => {
-    ctx.save(); // 儲存當前狀態
-    ctx.beginPath();
-    ctx.moveTo(data.x0, data.y0);
-    ctx.lineTo(data.x1, data.y1);
+    ctx.beginPath(); ctx.moveTo(data.x0, data.y0); ctx.lineTo(data.x1, data.y1);
     ctx.strokeStyle = (data.tool === 'pen') ? data.color : '#FFFFFF';
-    ctx.lineWidth = data.size;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-    ctx.restore(); // 恢復自己的畫筆狀態
+    ctx.lineWidth = data.size; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
 });
-
-
-// ----------------------------------------
-// III. 遊戲狀態與 Socket 事件處理
-// ----------------------------------------
+socket.on('canvasCleared', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
 
 function setupEventListeners() {
-    // 聊天/猜測表單提交
-    guessForm.addEventListener('submit', (e) => {
+    els.guessForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const text = chatInput.value.trim();
+        const text = els.chatInput.value.trim();
         if (text) {
-            // 伺服器會判斷是訊息還是猜對答案
             socket.emit('guess', { roomId: ROOM_ID, text: text });
-            chatInput.value = ''; // 清空輸入框
+            els.chatInput.value = '';
         }
     });
-
-    // 畫家出題表單提交
-    wordForm.addEventListener('submit', (e) => {
+    els.wordForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const word = wordInput.value.trim();
+        const word = els.wordInput.value.trim();
         if (word && IS_DRAWER) {
             socket.emit('startRound', { roomId: ROOM_ID, word: word });
-            wordModal.style.display = 'none';
+            els.wordModal.style.display = 'none';
+            els.wordInput.value = '';
         }
     });
-
-    // 工具列按鈕
-    document.querySelectorAll('.tool-button').forEach(button => {
-        button.addEventListener('click', (e) => {
+    document.querySelectorAll('.tool-button').forEach(btn => {
+        if (!btn.dataset.tool) return;
+        btn.addEventListener('click', (e) => {
             const tool = e.currentTarget.dataset.tool;
             if (tool) {
                 currentTool = tool;
-                // 視覺更新：只有當前工具按鈕 active
-                document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tool-button').forEach(b => b.classList.remove('active'));
+                if(tool==='eraser') document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('active'));
                 e.currentTarget.classList.add('active');
             }
         });
     });
-
-    // 顏色/尺寸選擇器
-    document.getElementById('colorPicker').addEventListener('input', (e) => {
-        currentColor = e.target.value;
-    });
-    document.getElementById('sizeSlider').addEventListener('input', (e) => {
-        currentSize = parseInt(e.target.value);
-    });
-
-    // 畫家按鈕：顯示出題 Modal
-    startRoundButton.addEventListener('click', () => {
-        if (IS_DRAWER) {
-            wordModal.style.display = 'block';
-        } else {
-            console.log("只有畫家可以開始回合。");
-        }
-    });
+    document.getElementById('sizeSlider').addEventListener('input', (e) => currentSize = parseInt(e.target.value));
+    els.startRoundBtn.addEventListener('click', () => { if (IS_DRAWER) els.wordModal.style.display = 'block'; });
 }
 
-/**
- * 更新玩家列表和分數
- * @param {object} scores - { userId: score, ... }
- * @param {object} playerMap - { userId: { nickname, socketId }, ... }
- * @param {string} currentDrawerSocketId - 當前畫家的 socket ID
- */
+// ★★★ 關鍵函式：更新分數板 ★★★
 function updateScoreboard(scores, playerMap, currentDrawerSocketId) {
-    playerListEl.innerHTML = '';
-    
-    // 將 playerMap 轉成陣列並依分數排序
+    els.playerList.innerHTML = '';
+    // 將 Map 轉為 Array，並依照分數排序
     const sortedPlayers = Object.values(playerMap)
         .sort((a, b) => (scores[b.userId] || 0) - (scores[a.userId] || 0));
 
     sortedPlayers.forEach(p => {
+        // 現在 p.userId 是存在的，所以可以正確查到分數
         const score = scores[p.userId] || 0;
         const isSelf = p.userId === USER_ID;
         const isDrawer = p.socketId === currentDrawerSocketId;
+        const hasGuessed = p.hasGuessed; 
         
         const li = document.createElement('li');
-        li.classList.add('player-item');
-        if (isSelf) li.classList.add('self');
-        if (isDrawer) li.classList.add('drawer');
-
+        li.className = `player-item ${isSelf ? 'self' : ''} ${isDrawer ? 'drawer' : ''} ${hasGuessed ? 'guessed' : ''}`;
         li.innerHTML = `
-            ${isDrawer ? '🎨' : ''}
+            ${isDrawer ? '' : ''}
             <span class="player-name">${p.nickname}</span> 
             <span class="score">${score}</span>
         `;
-        playerListEl.appendChild(li);
+        els.playerList.appendChild(li);
     });
 }
 
-/**
- * 啟用/禁用畫家專屬的控制項（畫布繪圖、工具列、開始按鈕）
- * @param {boolean} isDrawer - 是否為畫家
- */
 function toggleDrawerControls(isDrawer) {
     IS_DRAWER = isDrawer;
-    // 畫布本身 (mouseup/down/move) 已經在 draw 函式內判斷 IS_DRAWER
-
-    const controls = [
-        document.getElementById('colorPicker'),
-        document.getElementById('sizeSlider'),
-        document.getElementById('clearCanvas')
-    ];
-    
-    controls.forEach(control => {
-        control.disabled = !isDrawer;
-        control.style.opacity = isDrawer ? '1' : '0.5';
+    const controls = document.querySelectorAll('.tool-button:not(#startRoundButton), .size-slider, .color-swatch');
+    controls.forEach(c => {
+        const el = c; 
+        if (el.classList.contains('color-swatch')) {
+            el.style.pointerEvents = isDrawer ? 'auto' : 'none';
+            el.style.opacity = isDrawer ? '1' : '0.5';
+        } else {
+            el.disabled = !isDrawer;
+            el.style.opacity = isDrawer ? '1' : '0.5';
+        }
     });
-
-    // 開始回合按鈕
-    startRoundButton.style.display = isDrawer ? 'inline-block' : 'none';
 }
 
+// 接收時間更新：移動計時條
+socket.on('timerUpdate', ({ timeLeft, total }) => {
+    if (!els.timerBar) return;
+    const percent = (timeLeft / total) * 100;
+    els.timerBar.style.width = `${percent}%`;
+    if (percent < 20) {
+        els.timerBar.style.backgroundColor = 'var(--danger-red)';
+    } else {
+        els.timerBar.style.backgroundColor = 'var(--gartic-blue)';
+    }
+});
 
-// ----------------------------------------
-// IV. Socket.IO 伺服器回傳事件
-// ----------------------------------------
-
-// 接收：分數/玩家列表更新
-// data: { scores: { userId: score, ... }, playerMap: { userId: { nickname, socketId }, ... }, currentDrawerSocketId: '...' }
 socket.on('playerListUpdate', ({ scores, playerMap, currentDrawerSocketId }) => {
     updateScoreboard(scores, playerMap, currentDrawerSocketId);
 });
 
-// 接收：有人傳訊息（或猜錯）
-// data: { nickname, text }
-socket.on('chatMessage', ({ nickname, text, isSystem = false }) => {
+socket.on('chatMessage', ({ nickname, text, isSystem }) => {
     const p = document.createElement('p');
-    p.classList.add('message');
-    if (isSystem) {
-        p.classList.add('system-message');
-        p.innerHTML = `<span class="system">${text}</span>`;
-    } else {
-        p.innerHTML = `<span class="user">${nickname}：</span>${text}`;
-    }
-    messagesEl.appendChild(p);
-    messagesEl.scrollTop = messagesEl.scrollHeight; // 自動捲到底
+    p.className = `message ${isSystem ? 'system-message' : ''}`;
+    if (isSystem) p.innerHTML = `<span class="system">${text}</span>`;
+    else p.innerHTML = `<span class="user">${nickname}：</span>${text}`;
+    els.messages.appendChild(p);
+    els.messages.scrollTop = els.messages.scrollHeight;
 });
 
-
-// 接收：回合開始 (猜家視角)
-// data: { drawerUserId, drawerNickname, wordLength }
 socket.on('roundStarted', ({ drawerUserId, drawerNickname, wordLength }) => {
-    currentWordLength = wordLength;
-    gameStatusEl.textContent = `${drawerNickname} 正在作畫...`;
-    currentWordDisplay.textContent = `共有 ${wordLength} 個字...`;
-
-    // 確保自己不是畫家
+    els.gameStatus.textContent = `${drawerNickname} 正在作畫...`;
+    els.currentWordDisplay.textContent = `提示：${wordLength} 個字`;
     if (String(drawerUserId) !== USER_ID) {
-        toggleDrawerControls(false); 
+        toggleDrawerControls(false);
+        els.startRoundBtn.style.display = 'none';
     }
-    
-    // 清空畫布，準備新回合
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 });
 
-
-// 接收：回合開始 (畫家視角)
-// data: { word }
 socket.on('roundStartedForDrawer', ({ word }) => {
-    gameStatusEl.textContent = `你的題目是：${word}`;
-    currentWordDisplay.textContent = `✍️ 你的題目：${word}`;
-    toggleDrawerControls(true); // 確定自己是畫家
+    els.gameStatus.textContent = `你的題目是：${word}`;
+    els.currentWordDisplay.textContent = `✍️ 題目：${word}`;
+    toggleDrawerControls(true);
+    els.startRoundBtn.style.display = 'none'; 
 });
 
-
-// 接收：回合結束 (有人猜對)
-// data: { winnerUserId, drawerUserId, answer, scores }
-socket.on('roundEnded', ({ winnerUserId, drawerUserId, answer }) => {
-    const isWinner = String(winnerUserId) === USER_ID;
-    const isDrawer = String(drawerUserId) === USER_ID;
-    
-    let message = `🎯 回合結束！答案是「${answer}」。`;
-    if (isWinner) {
-        message += "恭喜你答對！";
-    } else {
-        message += "請準備下一回合。";
-    }
-
-    // 顯示系統訊息
-    socket.emit('systemMessage', { roomId: ROOM_ID, text: message });
-    
-    gameStatusEl.textContent = `✅ 答案揭曉：${answer}！請等待下一位畫家。`;
-    currentWordDisplay.textContent = '答案已揭曉，請等待下一回合...';
-    
-    toggleDrawerControls(false); // 回合結束，先鎖定控制
+socket.on('roundEnded', ({ winnerUserId, answer, reason }) => {
+    els.gameStatus.textContent = reason ? `${reason} 答案：${answer}` : `答案揭曉：${answer}`;
+    els.currentWordDisplay.textContent = '回合結束';
+    toggleDrawerControls(false);
+    els.startRoundBtn.style.display = 'none';
+    if(els.timerBar) els.timerBar.style.width = '0%';
 });
 
-
-// 接收：輪到下一個畫家出題
-// data: { drawerSocketId, drawerNickname }
 socket.on('nextDrawer', ({ drawerSocketId, drawerNickname }) => {
-    const isNextDrawer = socket.id === drawerSocketId;
-    
-    gameStatusEl.textContent = `請 ${drawerNickname} 出題！`;
-    currentWordDisplay.textContent = '等待畫家出題中...';
-
-    if (isNextDrawer) {
-        toggleDrawerControls(true); // 輪到我了！
-        // 彈出出題 Modal
-        wordModal.style.display = 'block'; 
-        // 清空畫布 (給新畫家用)
+    const isMe = socket.id === drawerSocketId;
+    els.gameStatus.textContent = isMe ? '輪到你了！請出題' : `請 ${drawerNickname} 出題`;
+    els.currentWordDisplay.textContent = '準備中...';
+    if(els.timerBar) {
+        els.timerBar.style.width = '100%';
+        els.timerBar.style.backgroundColor = 'var(--gartic-blue)';
+    }
+    if (isMe) {
+        toggleDrawerControls(true);
+        els.startRoundBtn.style.display = 'inline-block'; 
+        els.wordModal.style.display = 'block';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     } else {
         toggleDrawerControls(false);
+        els.startRoundBtn.style.display = 'none';
     }
 });
 
-
-// 頁面載入時執行
 document.addEventListener("DOMContentLoaded", initGame);
